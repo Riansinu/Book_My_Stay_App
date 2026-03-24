@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 6.1
+ * Version: 7.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -67,7 +67,7 @@ class RoomInventory {
     }
 }
 
-// ---------------- SEARCH SERVICE ----------------
+// ---------------- SEARCH ----------------
 class RoomSearchService {
 
     void searchAvailableRooms(List<Room> rooms, RoomInventory inventory) {
@@ -100,11 +100,7 @@ class Reservation {
 // ---------------- BOOKING QUEUE ----------------
 class BookingQueue {
 
-    private Queue<Reservation> queue;
-
-    BookingQueue() {
-        queue = new LinkedList<>();
-    }
+    private Queue<Reservation> queue = new LinkedList<>();
 
     void addRequest(Reservation r) {
         queue.add(r);
@@ -119,8 +115,7 @@ class BookingQueue {
 class BookingService {
 
     private Set<String> allocatedRooms = new HashSet<>();
-    private HashMap<String, Set<String>> roomAllocations = new HashMap<>();
-    private HashMap<String, Integer> roomCounters = new HashMap<>();
+    private HashMap<String, Integer> counters = new HashMap<>();
 
     void processBookings(Queue<Reservation> queue, RoomInventory inventory) {
 
@@ -133,21 +128,15 @@ class BookingService {
 
             if (available > 0) {
 
-                // Generate unique room ID
-                int count = roomCounters.getOrDefault(r.roomType, 0) + 1;
-                roomCounters.put(r.roomType, count);
+                int count = counters.getOrDefault(r.roomType, 0) + 1;
+                counters.put(r.roomType, count);
 
-                String roomId = r.roomType.split(" ")[0] + "-" + count;
+                String prefix = r.roomType.split(" ")[0];
+                String roomId = prefix + "-" + count;
 
-                // Ensure uniqueness
                 if (!allocatedRooms.contains(roomId)) {
 
                     allocatedRooms.add(roomId);
-
-                    roomAllocations.putIfAbsent(r.roomType, new HashSet<>());
-                    roomAllocations.get(r.roomType).add(roomId);
-
-                    // Update inventory
                     inventory.updateAvailability(r.roomType, -1);
 
                     System.out.println("Booking confirmed for Guest: "
@@ -155,9 +144,41 @@ class BookingService {
                 }
 
             } else {
-                System.out.println("Booking failed for " + r.guestName + " (No rooms available)");
+                System.out.println("Booking failed for " + r.guestName);
             }
         }
+    }
+}
+
+// ---------------- SERVICE ----------------
+class Service {
+    String name;
+    double cost;
+
+    Service(String name, double cost) {
+        this.name = name;
+        this.cost = cost;
+    }
+}
+
+// ---------------- ADD-ON MANAGER ----------------
+class AddOnServiceManager {
+
+    private HashMap<String, List<Service>> serviceMap = new HashMap<>();
+
+    void addService(String reservationId, Service service) {
+        serviceMap.putIfAbsent(reservationId, new ArrayList<>());
+        serviceMap.get(reservationId).add(service);
+    }
+
+    double calculateTotalCost(String reservationId) {
+        double total = 0;
+
+        for (Service s : serviceMap.getOrDefault(reservationId, new ArrayList<>())) {
+            total += s.cost;
+        }
+
+        return total;
     }
 }
 
@@ -185,7 +206,6 @@ public class HotelBookingManagementApp {
 
         // UC5 - Queue
         BookingQueue bookingQueue = new BookingQueue();
-
         bookingQueue.addRequest(new Reservation("Abhi", "Single Room"));
         bookingQueue.addRequest(new Reservation("Subha", "Single Room"));
         bookingQueue.addRequest(new Reservation("Vanmathi", "Suite Room"));
@@ -194,5 +214,17 @@ public class HotelBookingManagementApp {
         System.out.println();
         BookingService bookingService = new BookingService();
         bookingService.processBookings(bookingQueue.getQueue(), inventory);
+
+        // UC7 - Add-on Services
+        System.out.println("\nAdd-On Service Selection");
+
+        String reservationId = "Single-1";
+
+        AddOnServiceManager manager = new AddOnServiceManager();
+        manager.addService(reservationId, new Service("Breakfast", 500));
+        manager.addService(reservationId, new Service("Pickup", 1000));
+
+        System.out.println("Reservation ID: " + reservationId);
+        System.out.println("Total Add-On Cost: " + manager.calculateTotalCost(reservationId));
     }
 }
