@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 9.1
+ * Version: 10.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -48,10 +48,9 @@ class SuiteRoom extends Room {
 // ---------------- INVENTORY ----------------
 class RoomInventory {
 
-    private HashMap<String, Integer> inventory;
+    private HashMap<String, Integer> inventory = new HashMap<>();
 
     RoomInventory() {
-        inventory = new HashMap<>();
         inventory.put("Single Room", 5);
         inventory.put("Double Room", 3);
         inventory.put("Suite Room", 2);
@@ -62,8 +61,7 @@ class RoomInventory {
     }
 
     void updateAvailability(String roomType, int change) {
-        int current = inventory.getOrDefault(roomType, 0);
-        inventory.put(roomType, current + change);
+        inventory.put(roomType, inventory.getOrDefault(roomType, 0) + change);
     }
 }
 
@@ -71,7 +69,6 @@ class RoomInventory {
 class RoomSearchService {
 
     void searchAvailableRooms(List<Room> rooms, RoomInventory inventory) {
-
         System.out.println("Room Search\n");
 
         for (Room room : rooms) {
@@ -131,7 +128,8 @@ class BookingService {
     private Set<String> allocatedRooms = new HashSet<>();
     private HashMap<String, Integer> counters = new HashMap<>();
 
-    void processBookings(Queue<Reservation> queue, RoomInventory inventory, BookingHistory history) {
+    void processBookings(Queue<Reservation> queue, RoomInventory inventory,
+                         BookingHistory history, CancellationService cancelService) {
 
         System.out.println("Room Allocation Processing");
 
@@ -152,8 +150,10 @@ class BookingService {
 
                     allocatedRooms.add(roomId);
                     inventory.updateAvailability(r.roomType, -1);
-
                     history.addBooking(r);
+
+                    // Register for cancellation
+                    cancelService.registerReservation(roomId);
 
                     System.out.println("Booking confirmed for Guest: "
                             + r.guestName + ", Room ID: " + roomId);
@@ -170,13 +170,12 @@ class BookingService {
 class BookingReportService {
 
     void generateReport(List<Reservation> history) {
-
         System.out.println("\nBooking History and Reporting\n");
         System.out.println("Booking History Report");
 
         for (Reservation r : history) {
-            String room = r.roomType.split(" ")[0];
-            System.out.println("Guest: " + r.guestName + ", Room Type: " + room);
+            System.out.println("Guest: " + r.guestName +
+                    ", Room Type: " + r.roomType.split(" ")[0]);
         }
     }
 }
@@ -204,37 +203,72 @@ class AddOnServiceManager {
 
     double calculateTotalCost(String reservationId) {
         double total = 0;
-
         for (Service s : serviceMap.getOrDefault(reservationId, new ArrayList<>())) {
             total += s.cost;
         }
-
         return total;
     }
 }
 
-// ---------------- CUSTOM EXCEPTION ----------------
+// ---------------- VALIDATION ----------------
 class InvalidBookingException extends Exception {
-    InvalidBookingException(String message) {
-        super(message);
+    InvalidBookingException(String msg) {
+        super(msg);
     }
 }
 
-// ---------------- VALIDATOR ----------------
 class BookingValidator {
 
-    private static final Set<String> validRooms =
+    private static final Set<String> valid =
             new HashSet<>(Arrays.asList("Single", "Double", "Suite"));
 
-    static void validate(String guestName, String roomType) throws InvalidBookingException {
+    static void validate(String name, String type) throws InvalidBookingException {
 
-        if (guestName == null || guestName.trim().isEmpty()) {
+        if (name == null || name.trim().isEmpty()) {
             throw new InvalidBookingException("Guest name cannot be empty");
         }
 
-        if (!validRooms.contains(roomType)) {
+        if (!valid.contains(type)) {
             throw new InvalidBookingException("Invalid room type selected.");
         }
+    }
+}
+
+// ---------------- CANCELLATION ----------------
+class CancellationService {
+
+    private Stack<String> rollbackStack = new Stack<>();
+    private Set<String> activeReservations = new HashSet<>();
+
+    void registerReservation(String roomId) {
+        activeReservations.add(roomId);
+    }
+
+    void cancelBooking(String roomId, RoomInventory inventory) {
+
+        System.out.println("\nBooking Cancellation");
+
+        if (!activeReservations.contains(roomId)) {
+            System.out.println("Cancellation failed: Invalid or already cancelled reservation.");
+            return;
+        }
+
+        activeReservations.remove(roomId);
+        rollbackStack.push(roomId);
+
+        String roomType = roomId.split("-")[0] + " Room";
+        inventory.updateAvailability(roomType, +1);
+
+        System.out.println("Booking cancelled successfully. Inventory restored for room type: "
+                + roomType.split(" ")[0]);
+
+        System.out.println("\nRollback History (Most Recent First):");
+        for (int i = rollbackStack.size() - 1; i >= 0; i--) {
+            System.out.println("Released Reservation ID: " + rollbackStack.get(i));
+        }
+
+        System.out.println("\nUpdated " + roomType.split(" ")[0] +
+                " Room Availability: " + inventory.getAvailability(roomType));
     }
 }
 
@@ -247,49 +281,46 @@ public class HotelBookingManagementApp {
         System.out.println("        Book My Stay App");
         System.out.println("=========================================\n");
 
-        // Rooms
-        List<Room> rooms = new ArrayList<>();
-        rooms.add(new SingleRoom());
-        rooms.add(new DoubleRoom());
-        rooms.add(new SuiteRoom());
+        List<Room> rooms = Arrays.asList(
+                new SingleRoom(),
+                new DoubleRoom(),
+                new SuiteRoom()
+        );
 
-        // Inventory
         RoomInventory inventory = new RoomInventory();
 
-        // UC4 - Search
+        // UC4
         new RoomSearchService().searchAvailableRooms(rooms, inventory);
 
-        // UC5 - Queue
-        BookingQueue bookingQueue = new BookingQueue();
-        bookingQueue.addRequest(new Reservation("Abhi", "Single Room"));
-        bookingQueue.addRequest(new Reservation("Subha", "Double Room"));
-        bookingQueue.addRequest(new Reservation("Vanmathi", "Suite Room"));
+        // UC5
+        BookingQueue queue = new BookingQueue();
+        queue.addRequest(new Reservation("Abhi", "Single Room"));
+        queue.addRequest(new Reservation("Subha", "Double Room"));
+        queue.addRequest(new Reservation("Vanmathi", "Suite Room"));
 
-        // UC6 + UC8
+        // UC6 + UC8 + UC10
         BookingHistory history = new BookingHistory();
-        BookingService bookingService = new BookingService();
+        CancellationService cancelService = new CancellationService();
 
         System.out.println();
-        bookingService.processBookings(bookingQueue.getQueue(), inventory, history);
+        new BookingService().processBookings(
+                queue.getQueue(), inventory, history, cancelService
+        );
 
-        // UC7 - Add-on
+        // UC7
         System.out.println("\nAdd-On Service Selection");
+        AddOnServiceManager mgr = new AddOnServiceManager();
+        mgr.addService("Single-1", new Service("Breakfast", 500));
+        mgr.addService("Single-1", new Service("Pickup", 1000));
 
-        String reservationId = "Single-1";
+        System.out.println("Reservation ID: Single-1");
+        System.out.println("Total Add-On Cost: " + mgr.calculateTotalCost("Single-1"));
 
-        AddOnServiceManager manager = new AddOnServiceManager();
-        manager.addService(reservationId, new Service("Breakfast", 500));
-        manager.addService(reservationId, new Service("Pickup", 1000));
-
-        System.out.println("Reservation ID: " + reservationId);
-        System.out.println("Total Add-On Cost: " + manager.calculateTotalCost(reservationId));
-
-        // UC8 - Report
+        // UC8
         new BookingReportService().generateReport(history.getHistory());
 
-        // UC9 - Validation
+        // UC9
         System.out.println("\nBooking Validation");
-
         Scanner sc = new Scanner(System.in);
 
         try {
@@ -300,11 +331,13 @@ public class HotelBookingManagementApp {
             String type = sc.nextLine();
 
             BookingValidator.validate(name, type);
-
             System.out.println("Booking successful!");
 
         } catch (InvalidBookingException e) {
             System.out.println("Booking failed: " + e.getMessage());
         }
+
+        // UC10
+        cancelService.cancelBooking("Single-1", inventory);
     }
 }
