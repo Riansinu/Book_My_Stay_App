@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 7.1
+ * Version: 8.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -111,13 +111,27 @@ class BookingQueue {
     }
 }
 
+// ---------------- BOOKING HISTORY ----------------
+class BookingHistory {
+
+    private List<Reservation> history = new ArrayList<>();
+
+    void addBooking(Reservation r) {
+        history.add(r);
+    }
+
+    List<Reservation> getHistory() {
+        return history;
+    }
+}
+
 // ---------------- BOOKING SERVICE ----------------
 class BookingService {
 
     private Set<String> allocatedRooms = new HashSet<>();
     private HashMap<String, Integer> counters = new HashMap<>();
 
-    void processBookings(Queue<Reservation> queue, RoomInventory inventory) {
+    void processBookings(Queue<Reservation> queue, RoomInventory inventory, BookingHistory history) {
 
         System.out.println("Room Allocation Processing");
 
@@ -139,6 +153,8 @@ class BookingService {
                     allocatedRooms.add(roomId);
                     inventory.updateAvailability(r.roomType, -1);
 
+                    history.addBooking(r);
+
                     System.out.println("Booking confirmed for Guest: "
                             + r.guestName + ", Room ID: " + roomId);
                 }
@@ -146,6 +162,21 @@ class BookingService {
             } else {
                 System.out.println("Booking failed for " + r.guestName);
             }
+        }
+    }
+}
+
+// ---------------- REPORT ----------------
+class BookingReportService {
+
+    void generateReport(List<Reservation> history) {
+
+        System.out.println("\nBooking History and Reporting\n");
+        System.out.println("Booking History Report");
+
+        for (Reservation r : history) {
+            String room = r.roomType.split(" ")[0];
+            System.out.println("Guest: " + r.guestName + ", Room Type: " + room);
         }
     }
 }
@@ -161,7 +192,7 @@ class Service {
     }
 }
 
-// ---------------- ADD-ON MANAGER ----------------
+// ---------------- ADD-ON ----------------
 class AddOnServiceManager {
 
     private HashMap<String, List<Service>> serviceMap = new HashMap<>();
@@ -201,21 +232,22 @@ public class HotelBookingManagementApp {
         RoomInventory inventory = new RoomInventory();
 
         // UC4 - Search
-        RoomSearchService search = new RoomSearchService();
-        search.searchAvailableRooms(rooms, inventory);
+        new RoomSearchService().searchAvailableRooms(rooms, inventory);
 
         // UC5 - Queue
         BookingQueue bookingQueue = new BookingQueue();
         bookingQueue.addRequest(new Reservation("Abhi", "Single Room"));
-        bookingQueue.addRequest(new Reservation("Subha", "Single Room"));
+        bookingQueue.addRequest(new Reservation("Subha", "Double Room"));
         bookingQueue.addRequest(new Reservation("Vanmathi", "Suite Room"));
 
-        // UC6 - Allocation
-        System.out.println();
+        // UC6 + UC8
+        BookingHistory history = new BookingHistory();
         BookingService bookingService = new BookingService();
-        bookingService.processBookings(bookingQueue.getQueue(), inventory);
 
-        // UC7 - Add-on Services
+        System.out.println();
+        bookingService.processBookings(bookingQueue.getQueue(), inventory, history);
+
+        // UC7 - Add-on
         System.out.println("\nAdd-On Service Selection");
 
         String reservationId = "Single-1";
@@ -226,5 +258,8 @@ public class HotelBookingManagementApp {
 
         System.out.println("Reservation ID: " + reservationId);
         System.out.println("Total Add-On Cost: " + manager.calculateTotalCost(reservationId));
+
+        // UC8 - Report
+        new BookingReportService().generateReport(history.getHistory());
     }
 }
