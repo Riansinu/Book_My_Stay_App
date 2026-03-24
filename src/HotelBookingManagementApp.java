@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 4.1
+ * Version: 5.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -73,12 +73,48 @@ class RoomSearchService {
         for (Room room : rooms) {
             int available = inventory.getAvailability(room.type);
 
-            // Only show available rooms
             if (available > 0) {
                 room.displayDetails();
                 System.out.println("Available: " + available);
                 System.out.println();
             }
+        }
+    }
+}
+
+// ---------------- RESERVATION ----------------
+class Reservation {
+    String guestName;
+    String roomType;
+
+    Reservation(String guestName, String roomType) {
+        this.guestName = guestName;
+        this.roomType = roomType;
+    }
+}
+
+// ---------------- BOOKING QUEUE ----------------
+class BookingQueue {
+
+    private Queue<Reservation> queue;
+
+    BookingQueue() {
+        queue = new LinkedList<>();
+    }
+
+    void addRequest(Reservation r) {
+        queue.add(r);
+    }
+
+    void processRequests() {
+
+        System.out.println("Booking Request Queue");
+
+        while (!queue.isEmpty()) {
+            Reservation r = queue.poll();
+
+            System.out.println("Processing booking for Guest: "
+                    + r.guestName + ", Room Type: " + r.roomType);
         }
     }
 }
@@ -101,8 +137,18 @@ public class HotelBookingManagementApp {
         // Inventory
         RoomInventory inventory = new RoomInventory();
 
-        // Search (READ ONLY)
+        // UC4 - Search
         RoomSearchService search = new RoomSearchService();
         search.searchAvailableRooms(rooms, inventory);
+
+        // UC5 - Booking Queue
+        BookingQueue bookingQueue = new BookingQueue();
+
+        bookingQueue.addRequest(new Reservation("Abhi", "Single"));
+        bookingQueue.addRequest(new Reservation("Subha", "Double"));
+        bookingQueue.addRequest(new Reservation("Vanmathi", "Suite"));
+
+        System.out.println();
+        bookingQueue.processRequests();
     }
 }
