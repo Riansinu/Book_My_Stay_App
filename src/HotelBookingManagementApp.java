@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 5.1
+ * Version: 6.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -52,7 +52,6 @@ class RoomInventory {
 
     RoomInventory() {
         inventory = new HashMap<>();
-
         inventory.put("Single Room", 5);
         inventory.put("Double Room", 3);
         inventory.put("Suite Room", 2);
@@ -60,6 +59,11 @@ class RoomInventory {
 
     int getAvailability(String roomType) {
         return inventory.getOrDefault(roomType, 0);
+    }
+
+    void updateAvailability(String roomType, int change) {
+        int current = inventory.getOrDefault(roomType, 0);
+        inventory.put(roomType, current + change);
     }
 }
 
@@ -106,15 +110,53 @@ class BookingQueue {
         queue.add(r);
     }
 
-    void processRequests() {
+    Queue<Reservation> getQueue() {
+        return queue;
+    }
+}
 
-        System.out.println("Booking Request Queue");
+// ---------------- BOOKING SERVICE ----------------
+class BookingService {
+
+    private Set<String> allocatedRooms = new HashSet<>();
+    private HashMap<String, Set<String>> roomAllocations = new HashMap<>();
+    private HashMap<String, Integer> roomCounters = new HashMap<>();
+
+    void processBookings(Queue<Reservation> queue, RoomInventory inventory) {
+
+        System.out.println("Room Allocation Processing");
 
         while (!queue.isEmpty()) {
-            Reservation r = queue.poll();
 
-            System.out.println("Processing booking for Guest: "
-                    + r.guestName + ", Room Type: " + r.roomType);
+            Reservation r = queue.poll();
+            int available = inventory.getAvailability(r.roomType);
+
+            if (available > 0) {
+
+                // Generate unique room ID
+                int count = roomCounters.getOrDefault(r.roomType, 0) + 1;
+                roomCounters.put(r.roomType, count);
+
+                String roomId = r.roomType.split(" ")[0] + "-" + count;
+
+                // Ensure uniqueness
+                if (!allocatedRooms.contains(roomId)) {
+
+                    allocatedRooms.add(roomId);
+
+                    roomAllocations.putIfAbsent(r.roomType, new HashSet<>());
+                    roomAllocations.get(r.roomType).add(roomId);
+
+                    // Update inventory
+                    inventory.updateAvailability(r.roomType, -1);
+
+                    System.out.println("Booking confirmed for Guest: "
+                            + r.guestName + ", Room ID: " + roomId);
+                }
+
+            } else {
+                System.out.println("Booking failed for " + r.guestName + " (No rooms available)");
+            }
         }
     }
 }
@@ -128,7 +170,7 @@ public class HotelBookingManagementApp {
         System.out.println("        Book My Stay App");
         System.out.println("=========================================\n");
 
-        // Create room objects
+        // Rooms
         List<Room> rooms = new ArrayList<>();
         rooms.add(new SingleRoom());
         rooms.add(new DoubleRoom());
@@ -141,14 +183,16 @@ public class HotelBookingManagementApp {
         RoomSearchService search = new RoomSearchService();
         search.searchAvailableRooms(rooms, inventory);
 
-        // UC5 - Booking Queue
+        // UC5 - Queue
         BookingQueue bookingQueue = new BookingQueue();
 
-        bookingQueue.addRequest(new Reservation("Abhi", "Single"));
-        bookingQueue.addRequest(new Reservation("Subha", "Double"));
-        bookingQueue.addRequest(new Reservation("Vanmathi", "Suite"));
+        bookingQueue.addRequest(new Reservation("Abhi", "Single Room"));
+        bookingQueue.addRequest(new Reservation("Subha", "Single Room"));
+        bookingQueue.addRequest(new Reservation("Vanmathi", "Suite Room"));
 
+        // UC6 - Allocation
         System.out.println();
-        bookingQueue.processRequests();
+        BookingService bookingService = new BookingService();
+        bookingService.processBookings(bookingQueue.getQueue(), inventory);
     }
 }
