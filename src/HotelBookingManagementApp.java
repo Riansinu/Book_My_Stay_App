@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 8.1
+ * Version: 9.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -213,6 +213,31 @@ class AddOnServiceManager {
     }
 }
 
+// ---------------- CUSTOM EXCEPTION ----------------
+class InvalidBookingException extends Exception {
+    InvalidBookingException(String message) {
+        super(message);
+    }
+}
+
+// ---------------- VALIDATOR ----------------
+class BookingValidator {
+
+    private static final Set<String> validRooms =
+            new HashSet<>(Arrays.asList("Single", "Double", "Suite"));
+
+    static void validate(String guestName, String roomType) throws InvalidBookingException {
+
+        if (guestName == null || guestName.trim().isEmpty()) {
+            throw new InvalidBookingException("Guest name cannot be empty");
+        }
+
+        if (!validRooms.contains(roomType)) {
+            throw new InvalidBookingException("Invalid room type selected.");
+        }
+    }
+}
+
 // ---------------- MAIN ----------------
 public class HotelBookingManagementApp {
 
@@ -261,5 +286,25 @@ public class HotelBookingManagementApp {
 
         // UC8 - Report
         new BookingReportService().generateReport(history.getHistory());
+
+        // UC9 - Validation
+        System.out.println("\nBooking Validation");
+
+        Scanner sc = new Scanner(System.in);
+
+        try {
+            System.out.print("Enter guest name: ");
+            String name = sc.nextLine();
+
+            System.out.print("Enter room type (Single/Double/Suite): ");
+            String type = sc.nextLine();
+
+            BookingValidator.validate(name, type);
+
+            System.out.println("Booking successful!");
+
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking failed: " + e.getMessage());
+        }
     }
 }
