@@ -2,7 +2,7 @@ import java.util.*;
 
 /**
  * Hotel Booking Management System
- * Version: 10.1
+ * Version: 11.1
  */
 
 // ---------------- ROOM DOMAIN ----------------
@@ -47,7 +47,6 @@ class SuiteRoom extends Room {
 
 // ---------------- INVENTORY ----------------
 class RoomInventory {
-
     private HashMap<String, Integer> inventory = new HashMap<>();
 
     RoomInventory() {
@@ -56,24 +55,22 @@ class RoomInventory {
         inventory.put("Suite Room", 2);
     }
 
-    int getAvailability(String roomType) {
+    synchronized int getAvailability(String roomType) {
         return inventory.getOrDefault(roomType, 0);
     }
 
-    void updateAvailability(String roomType, int change) {
+    synchronized void updateAvailability(String roomType, int change) {
         inventory.put(roomType, inventory.getOrDefault(roomType, 0) + change);
     }
 }
 
 // ---------------- SEARCH ----------------
 class RoomSearchService {
-
     void searchAvailableRooms(List<Room> rooms, RoomInventory inventory) {
         System.out.println("Room Search\n");
 
         for (Room room : rooms) {
             int available = inventory.getAvailability(room.type);
-
             if (available > 0) {
                 room.displayDetails();
                 System.out.println("Available: " + available);
@@ -96,7 +93,6 @@ class Reservation {
 
 // ---------------- BOOKING QUEUE ----------------
 class BookingQueue {
-
     private Queue<Reservation> queue = new LinkedList<>();
 
     void addRequest(Reservation r) {
@@ -110,7 +106,6 @@ class BookingQueue {
 
 // ---------------- BOOKING HISTORY ----------------
 class BookingHistory {
-
     private List<Reservation> history = new ArrayList<>();
 
     void addBooking(Reservation r) {
@@ -124,7 +119,6 @@ class BookingHistory {
 
 // ---------------- BOOKING SERVICE ----------------
 class BookingService {
-
     private Set<String> allocatedRooms = new HashSet<>();
     private HashMap<String, Integer> counters = new HashMap<>();
 
@@ -134,12 +128,10 @@ class BookingService {
         System.out.println("Room Allocation Processing");
 
         while (!queue.isEmpty()) {
-
             Reservation r = queue.poll();
             int available = inventory.getAvailability(r.roomType);
 
             if (available > 0) {
-
                 int count = counters.getOrDefault(r.roomType, 0) + 1;
                 counters.put(r.roomType, count);
 
@@ -147,18 +139,14 @@ class BookingService {
                 String roomId = prefix + "-" + count;
 
                 if (!allocatedRooms.contains(roomId)) {
-
                     allocatedRooms.add(roomId);
                     inventory.updateAvailability(r.roomType, -1);
                     history.addBooking(r);
-
-                    // Register for cancellation
                     cancelService.registerReservation(roomId);
 
                     System.out.println("Booking confirmed for Guest: "
                             + r.guestName + ", Room ID: " + roomId);
                 }
-
             } else {
                 System.out.println("Booking failed for " + r.guestName);
             }
@@ -168,7 +156,6 @@ class BookingService {
 
 // ---------------- REPORT ----------------
 class BookingReportService {
-
     void generateReport(List<Reservation> history) {
         System.out.println("\nBooking History and Reporting\n");
         System.out.println("Booking History Report");
@@ -193,7 +180,6 @@ class Service {
 
 // ---------------- ADD-ON ----------------
 class AddOnServiceManager {
-
     private HashMap<String, List<Service>> serviceMap = new HashMap<>();
 
     void addService(String reservationId, Service service) {
@@ -218,16 +204,13 @@ class InvalidBookingException extends Exception {
 }
 
 class BookingValidator {
-
     private static final Set<String> valid =
             new HashSet<>(Arrays.asList("Single", "Double", "Suite"));
 
     static void validate(String name, String type) throws InvalidBookingException {
-
         if (name == null || name.trim().isEmpty()) {
             throw new InvalidBookingException("Guest name cannot be empty");
         }
-
         if (!valid.contains(type)) {
             throw new InvalidBookingException("Invalid room type selected.");
         }
@@ -236,7 +219,6 @@ class BookingValidator {
 
 // ---------------- CANCELLATION ----------------
 class CancellationService {
-
     private Stack<String> rollbackStack = new Stack<>();
     private Set<String> activeReservations = new HashSet<>();
 
@@ -272,6 +254,48 @@ class CancellationService {
     }
 }
 
+// ---------------- UC11 CONCURRENCY ----------------
+class ConcurrentBookingProcessor {
+    private final Queue<Reservation> queue;
+    private final RoomInventory inventory;
+
+    ConcurrentBookingProcessor(Queue<Reservation> queue, RoomInventory inventory) {
+        this.queue = queue;
+        this.inventory = inventory;
+    }
+
+    public synchronized void processBooking() {
+        if (queue.isEmpty()) return;
+
+        Reservation r = queue.poll();
+        if (r == null) return;
+
+        int available = inventory.getAvailability(r.roomType);
+
+        if (available > 0) {
+            inventory.updateAvailability(r.roomType, -1);
+            System.out.println(Thread.currentThread().getName()
+                    + " booked for " + r.guestName);
+        } else {
+            System.out.println(Thread.currentThread().getName()
+                    + " failed for " + r.guestName);
+        }
+    }
+}
+
+class BookingThread extends Thread {
+    private final ConcurrentBookingProcessor processor;
+
+    BookingThread(ConcurrentBookingProcessor processor, String name) {
+        super(name);
+        this.processor = processor;
+    }
+
+    public void run() {
+        processor.processBooking();
+    }
+}
+
 // ---------------- MAIN ----------------
 public class HotelBookingManagementApp {
 
@@ -289,16 +313,13 @@ public class HotelBookingManagementApp {
 
         RoomInventory inventory = new RoomInventory();
 
-        // UC4
         new RoomSearchService().searchAvailableRooms(rooms, inventory);
 
-        // UC5
         BookingQueue queue = new BookingQueue();
         queue.addRequest(new Reservation("Abhi", "Single Room"));
         queue.addRequest(new Reservation("Subha", "Double Room"));
         queue.addRequest(new Reservation("Vanmathi", "Suite Room"));
 
-        // UC6 + UC8 + UC10
         BookingHistory history = new BookingHistory();
         CancellationService cancelService = new CancellationService();
 
@@ -307,7 +328,6 @@ public class HotelBookingManagementApp {
                 queue.getQueue(), inventory, history, cancelService
         );
 
-        // UC7
         System.out.println("\nAdd-On Service Selection");
         AddOnServiceManager mgr = new AddOnServiceManager();
         mgr.addService("Single-1", new Service("Breakfast", 500));
@@ -316,10 +336,8 @@ public class HotelBookingManagementApp {
         System.out.println("Reservation ID: Single-1");
         System.out.println("Total Add-On Cost: " + mgr.calculateTotalCost("Single-1"));
 
-        // UC8
         new BookingReportService().generateReport(history.getHistory());
 
-        // UC9
         System.out.println("\nBooking Validation");
         Scanner sc = new Scanner(System.in);
 
@@ -337,7 +355,27 @@ public class HotelBookingManagementApp {
             System.out.println("Booking failed: " + e.getMessage());
         }
 
-        // UC10
         cancelService.cancelBooking("Single-1", inventory);
+
+        // UC11
+        System.out.println("\nConcurrent Booking Simulation");
+
+        Queue<Reservation> sharedQueue = new LinkedList<>();
+        sharedQueue.add(new Reservation("Guest1", "Single Room"));
+        sharedQueue.add(new Reservation("Guest2", "Single Room"));
+        sharedQueue.add(new Reservation("Guest3", "Single Room"));
+
+        RoomInventory sharedInventory = new RoomInventory();
+
+        ConcurrentBookingProcessor processor =
+                new ConcurrentBookingProcessor(sharedQueue, sharedInventory);
+
+        Thread t1 = new BookingThread(processor, "Thread-1");
+        Thread t2 = new BookingThread(processor, "Thread-2");
+        Thread t3 = new BookingThread(processor, "Thread-3");
+
+        t1.start();
+        t2.start();
+        t3.start();
     }
 }
